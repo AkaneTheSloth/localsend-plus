@@ -1,271 +1,124 @@
-# LocalSend
+# LocalSend+ 🚀
 
-[![CI status][ci-badge]][ci-workflow]
-[![Translations][translate-badge]][translate-link]
-[![Packaging status][packaging-badge]][packaging-link]
+> LocalSend 的娱乐向增强分支。快，更快，再快一点。
+>
+> **这不是官方项目**。这是一个随时可能停更的娱乐 fork，不承诺传输质量，
+> 但欢迎所有人 fork、改、玩。
 
-[ci-badge]: https://github.com/localsend/localsend/actions/workflows/ci.yml/badge.svg
-[ci-workflow]: https://github.com/localsend/localsend/actions/workflows/ci.yml
-[translate-badge]: https://hosted.weblate.org/widget/localsend/app/svg-badge.svg
-[translate-link]: https://hosted.weblate.org/engage/localsend/
-[packaging-badge]: https://repology.org/badge/tiny-repos/localsend.svg
-[packaging-link]: https://repology.org/project/localsend/versions
+---
 
-[Homepage][homepage] • [Discord][discord] • [GitHub][github] • [Codeberg][codeberg]
+## 中文
 
-[English (Default)](README.md) • [Беларуская](/support/readme/README_BE.md) • [Español](/support/readme/README_ES.md) • [فارسی](/support/readme/README_FA.md) • [Filipino](/support/readme/README_PH.md) • [Français](/support/readme/README_FR.md) • [Indonesia](/support/readme/README_ID.md) • [Italiano](/support/readme/README_IT.md) • [日本語](/support/readme/README_JA.md) • [ភាសាខ្មែរ](/support/readme/README_KM.md) • [한국어](/support/readme/README_KO.md) • [Polski](/support/readme/README_PL.md) • [Português Brasil](/support/readme/README_PT_BR.md) • [Русский](/support/readme/README_RU.md) • [ภาษาไทย](/support/readme/README_TH.md) • [Türkçe](/support/readme/README_TR.md) • [Українська](/support/readme/README_UK.md) • [Tiếng Việt](/support/readme/README_VI.md) • [中文](/support/readme/README_ZH.md)
+### 这是什么
 
-[homepage]: https://localsend.org
-[discord]: https://discord.gg/GSRWmQNP87
-[github]: https://github.com/localsend/localsend
-[codeberg]: https://codeberg.org/localsend/localsend
+LocalSend+ 基于开源的 [LocalSend](https://github.com/localsend/localsend)（Apache 2.0，基线 v1.18.2），
+在**保留原版全部功能与 UI** 的前提下，对传输层做了大手术：
 
-LocalSend is a free, open-source app that allows you to securely share files and messages with nearby devices over your local network without needing an internet connection.
+- 🚀 把默认传输从 **TCP** 换成了 **QUIC**（基于 quinn 0.11）
+- ⚡ 用 **tokio 多线程**并行分块传输，多条连接同时跑
+- 🔓 支持 **明文传输**（局域网内对速度敏感、不需要加密的场景）
 
-- [About](#about)
-- [Sponsors](#sponsors)
-- [Screenshots](#screenshots)
-- [Download](#download)
-- [How It Works](#how-it-works)
-- [Dependency Hierarchy](#dependency-hierarchy)
-- [Getting Started](#getting-started)
-- [Contributing](#contributing)
-  - [Translation](#translation)
-  - [Bug Fixes and Improvements](#bug-fixes-and-improvements)
-- [Troubleshooting](#troubleshooting)
-- [Building](#building)
-  - [Android](#android)
-  - [iOS](#ios)
-  - [macOS](#macos)
-  - [Windows](#windows)
-  - [Linux](#linux)
+它依然是那个"不需要互联网、不需要服务器、局域网内直接互传"的 LocalSend，
+只是更快了。
 
-## About
+### 核心特性
 
-LocalSend is a cross-platform app that enables secure communication between devices using a REST API and HTTPS encryption. Unlike other messaging apps that rely on external servers, LocalSend doesn't require an internet connection or third-party servers, making it a fast and reliable solution for local communication.
+| 特性 | 说明 |
+|------|------|
+| 🚀 **QUIC 传输** | 以 QUIC 替代传统 TCP 传输；当 QUIC 不可用（未编译进二进制 / 运行期绑定失败）时**自动降级回 TCP**，绝不影响传输可用性 |
+| ⚡ **tokio 多线程并行** | 大文件切成多个字节区间，多条独立连接并发拉取，再按序写回；消除单连接队头阻塞对下载速度的影响 |
+| 🔓 **明文传输** | 保留 TLS 关闭路径，局域网内速度敏感、无需加密的场景可以直接明文直传 |
+| 📦 **断点续传** | 下载侧支持 HTTP `Range`（`206 Partial Content`）；上传侧支持 `offset` 协议 + `409` 协商，中断后从断点继续，而不是从头再来 |
+| 🔬 **硬件加速** | 运行时检测 SSE2/SSE4.2/AVX/AVX2/AVX-512/AES-NI/SHA-NI（x86_64）、NEON/AES/SHA2（aarch64），自动选择最优哈希/加密后端 |
+| ✨ **零拷贝直传** | 文件通过流式读取直出，不再经过中间 channel 多拷贝一次 |
 
-## Sponsors
+更多技术细节见 [LOCALSEND_PLUS.md](LOCALSEND_PLUS.md)。
 
-Browser testing via
+### 免责声明
 
-<a href="https://www.testmuai.com/?utm_medium=sponsor&utm_source=localsend" target="_blank">
-    <img src="https://localsend.org/img/sponsors/tesmu.svg" style="vertical-align: middle;" width="250" height="45" />
-</a>
+- 这是一个**娱乐 fork**，与 LocalSend 官方无关。
+- 我**不对传输质量负责**：QUIC / 多线程 / 明文等改动可能引入未知问题，请自行评估风险后再用。
+- 项目**随时可能停更**，没有维护承诺，也没有 issue 响应保证。
+- 但**欢迎所有人 fork**：想怎么改怎么改，开心就好 🎉
+- 已安装旧版本的用户升级时若提示"签名不一致"，请卸载后重装（个人签名密钥）。
 
-## Screenshots
+### 构建
 
-<img src="https://localsend.org/img/screenshot-iphone.webp" alt="iPhone screenshot" height="300"/> <img src="https://localsend.org/img/screenshot-pc.webp" alt="PC screenshot" height="300"/>
-
-## Download
-
-[![Packaging status](https://repology.org/badge/tiny-repos/localsend.svg)](https://repology.org/project/localsend/versions)
-
-It is recommended to download the app either from an app store or from a package manager because the app does not have an auto-update.
-
-| Windows                 | macOS                   | Linux              | Android        | iOS           | Fire OS    |
-|-------------------------|-------------------------|--------------------|----------------|---------------|------------|
-| [Winget][]              | [App Store][]           | [Flathub][]        | [Play Store][] | [App Store][] | [Amazon][] |
-| [Scoop][]               | [Homebrew][]            | [Nixpkgs][]        | [F-Droid][]    |               |            |
-| [Chocolatey][]          | [DMG Installer][latest] | [Snap][]           | [APK][latest]  |               |            |
-| [EXE Installer][latest] |                         | [AUR][]            |                |               |            |
-| [Portable ZIP][latest]  |                         | [TAR][latest]      |                |               |            |
-|                         |                         | [DEB][latest]      |                |               |            |
-|                         |                         | [AppImage][latest] |                |               |            |
-
-Read more about [distribution channels][].
-
-Windows binaries are signed. Read more about the [Code signing policy][].
-
-> [!CAUTION]
-> **Unofficial MSIX preview:** you can try builds from the latest commits at [localsend.ob-buff.dev](https://localsend.ob-buff.dev/). Stability is not guaranteed and all custom code tweaks are listed on that site.
-
-[windows store]: https://www.microsoft.com/store/apps/9NCB4Z0TZ6RR
-[app store]: https://apps.apple.com/us/app/localsend/id1661733229
-[play store]: https://play.google.com/store/apps/details?id=org.localsend.localsend_app
-[f-droid]: https://f-droid.org/packages/org.localsend.localsend_app
-[amazon]: https://www.amazon.com/dp/B0BW6MP732
-[winget]: https://github.com/microsoft/winget-pkgs/tree/master/manifests/l/LocalSend/LocalSend
-[scoop]: https://scoop.sh/#/apps?s=0&d=1&o=true&q=localsend&id=fb88113be361ca32c0dcac423cb4afdeda0b0c66
-[chocolatey]: https://community.chocolatey.org/packages/localsend
-[homebrew]: https://formulae.brew.sh/cask/localsend
-[flathub]: https://flathub.org/apps/details/org.localsend.localsend_app
-[nixpkgs]: https://search.nixos.org/packages?show=localsend
-[snap]: https://snapcraft.io/localsend
-[aur]: https://aur.archlinux.org/packages/localsend-bin
-[latest]: https://github.com/localsend/localsend/releases/latest
-[distribution channels]: https://github.com/localsend/localsend/blob/main/CONTRIBUTING.md#distribution
-[code signing policy]: https://github.com/localsend/localsend/blob/main/CODE_SIGNING.md
-
-**Compatibility**
-
-| Platform | Minimum Version | Note                                                                                                                        |
-|----------|-----------------|-----------------------------------------------------------------------------------------------------------------------------|
-| Android  | 5.0             | -                                                                                                                           |
-| iOS      | 12.0            | -                                                                                                                           |
-| macOS    | 11 Big Sur      | Use OpenCore Legacy Patcher 2.0.2 (See [#1005](https://github.com/localsend/localsend/issues/1005#issuecomment-2449899384)) |
-| Windows  | 10              | The last version to support Windows 7 is v1.15.4. There might be backports of newer versions for Windows 7 in the future.   |
-| Linux    | N.A.            | Deps: Gnome: `xdg-desktop-portal` and `xdg-desktop-portal-gtk`, KDE: `xdg-desktop-portal` and `xdg-desktop-portal-kde`      |
-
-## Setup
-
-In most cases, LocalSend should work out of the box. However, if you are having trouble sending or receiving files, you may need to configure your firewall to allow LocalSend to communicate over your local network.
-
-| Traffic Type | Protocol | Port  | Action |
-|--------------|----------|-------|--------|
-| Incoming     | TCP, UDP | 53317 | Allow  |
-| Outgoing     | TCP, UDP | Any   | Allow  |
-
-Also make sure to disable AP isolation on your router. It should be usually disabled by default but some routers may have it enabled (especially guest networks).
-See [troubleshooting](#troubleshooting) for more information.
-
-**Portable Mode**
-
-(Introduced in v1.13.0)
-
-Create a file named `settings.json` located in the same directory as the executable.
-This file can be empty.
-The app will use this file to store settings instead of the default location.
-
-**Start hidden**
-
-(Updated in v1.15.0)
-
-To start the app hidden (only in tray), use the `--hidden` flag (example: `localsend_app.exe --hidden`).
-
-On v1.14.0 and earlier, the app starts hidden if `autostart` flag is set, and the hidden setting is enabled.
-
-## How It Works
-
-LocalSend uses a secure communication protocol that allows devices to communicate with each other using a REST API. All data is sent securely over HTTPS, and the TLS/SSL certificate is generated on the fly on each device, ensuring maximum security.
-
-For more information on the LocalSend Protocol, see the [documentation](https://github.com/localsend/protocol).
-
-## Dependency Hierarchy
-
-![Dependency hierarchy](support/docs/dependency-hierarchy.svg)
-
-## Getting Started
-
-To compile LocalSend from the source code, follow these steps:
-
-1. Install Flutter [directly](https://flutter.dev) or using [fvm](https://fvm.app) (see [version required](.fvmrc))
-2. Install [Rust](https://www.rust-lang.org/tools/install)
-3. Clone the `LocalSend` repository
-4. Run `cd app` to enter the app directory
-5. Run `flutter pub get` to download dependencies
-6. Run `flutter run` to start the app
-
-> [!NOTE]
-> LocalSend currently requires an older Flutter version (specified in [.fvmrc](.fvmrc))
-> and thus build issues may be caused by a mismatch between the required and the (system-wide) installed Flutter version.  
-> To make development more consistent, LocalSend uses [fvm](https://fvm.app) to manage the project Flutter version.
-> After installing `fvm`, run `fvm flutter` instead of `flutter`.
-
-## Contributing
-
-We welcome contributions from anyone interested in helping improve LocalSend. If you'd like to contribute, there are a few ways to get involved:
-
-### Translation
-
-You can help translate LocalSend into other languages. We use the [Weblate](https://hosted.weblate.org/projects/localsend/app) platform to manage translations.
-
-Alternatively, you can also contribute by forking this repository and adding translations manually.
-
-The translations are located in the [app/assets/i18n](https://github.com/localsend/localsend/tree/main/app/assets/i18n) directory. Edit the `_missing_translations_<locale>.json` or `strings_<locale>.i18n.json` file to add or update translations.
-
-<a href="https://hosted.weblate.org/engage/localsend/">
-<img src="https://hosted.weblate.org/widget/localsend/app/multi-auto.svg" alt="Translation status" />
-</a>
-
-**_Take note:_ Fields decorated with `@` are not meant to be translated; they are not used in the app in any way, being merely informative text about the file or to give context to the translator.**
-
-### Bug Fixes and Improvements
-
-- **Bug Fixes:** If you find a bug, please create a pull request with a clear description of the issue and how to fix it.
-- **Improvements:** Have an idea for how to improve LocalSend? Please create an issue first to discuss why the improvement is needed.
-
-For more information, see the [contributing guide](https://github.com/localsend/localsend/blob/main/CONTRIBUTING.md).
-
-## Troubleshooting
-
-| Issue              | Platform (Sending) | Platform (Receiving) | Solution                                                                                                                                |
-|--------------------|--------------------|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
-| Device not visible | Any                | Any                  | Make sure to disable AP-Isolation on your router. If it is enabled, connections between devices are forbidden.                          |
-| Device not visible | Any                | Windows              | Make sure to configure your network as a "private" network. Windows might be more restrictive when the network is configured as public. |
-| Device not visible | macOS, iOS         | Any                  | You can try to toggle the "Local Network" permission under "Privacy" in the OS settings.                                                |
-| Speed too slow     | Any                | Any                  | Use 5 Ghz; Disable encryption on both devices                                                                                           |
-| Speed too slow     | Any                | Android              | Known issue. https://github.com/flutter-cavalry/saf_stream/issues/4                                                                     |
-
-## Building
-
-These commands are intended for maintainers only. Make sure to run them from the `app` directory.
-
-### Android
-
-Traditional APK
+与上游相同，从 `app` 目录执行：
 
 ```bash
-flutter build apk
-```
-
-AppBundle for Google Play
-
-```bash
-flutter build appbundle
-```
-
-### iOS
-
-```bash
-flutter build ipa
-```
-
-### macOS
-
-```bash
-flutter build macos
-```
-
-### Windows
-
-**Traditional**
-
-```bash
+flutter pub get
+flutter run        # 开发运行
+flutter build apk  # Android
 flutter build windows
-```
-
-**Local MSIX App**
-
-```bash
-flutter pub run msix:create
-```
-
-**Store ready**
-
-```bash
-flutter pub run msix:create --store
-```
-
-### Linux
-
-**Traditional**
-
-```bash
 flutter build linux
 ```
 
-**AppImage**
+> 注意：本项目要求 Rust 工具链（rust-toolchain.toml 指定 1.97.1）。
+> QUIC 后端由 Cargo feature `quic` 控制，默认**不**编译进 `full`；
+> 需要完整 QUIC 能力时请自行启用该 feature 构建。
+
+### 许可证
+
+[Apache License 2.0](LICENSE)。上游版权归 [Tien Do Nam](https://github.com/Tienisto) 及 LocalSend 贡献者所有。
+本分支的修改同样以 Apache 2.0 发布。
+
+---
+
+## English
+
+### What is this
+
+LocalSend+ is a **fun/experimental fork** of the open-source [LocalSend](https://github.com/localsend/localsend)
+(Apache 2.0, based on v1.18.2). It keeps **all original features and UI**, but performs major
+surgery on the **transport layer**:
+
+- 🚀 Replaces the default transport from **TCP** to **QUIC** (based on quinn 0.11)
+- ⚡ Uses **tokio multi-threading** for parallel chunked transfers over multiple connections
+- 🔓 Supports **plain-text transfer** (for speed-sensitive LAN scenarios where encryption is not needed)
+
+It is still the same LocalSend — no internet, no server, direct peer-to-peer over your local network.
+Just faster.
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🚀 **QUIC transport** | QUIC replaces legacy TCP; when QUIC is unavailable (not compiled in / runtime bind failure) it **automatically falls back to TCP**, so availability is never affected |
+| ⚡ **tokio parallel transfer** | Large files are split into byte ranges and fetched concurrently over independent connections, then written back in order; removes head-of-line blocking on the download side |
+| 🔓 **Plain-text transfer** | The TLS-off path is preserved for speed-sensitive LAN scenarios |
+| 📦 **Resumable transfer** | Download side supports HTTP `Range` (`206 Partial Content`); upload side supports an `offset` protocol with `409` negotiation, so interrupted transfers resume from where they stopped |
+| 🔬 **Hardware acceleration** | Runtime detection of SSE2/SSE4.2/AVX/AVX2/AVX-512/AES-NI/SHA-NI (x86_64) and NEON/AES/SHA2 (aarch64), with automatic selection of the fastest hash/crypto backend |
+| ✨ **Zero-copy streaming** | Files are streamed directly from disk with no extra copy through intermediate channels |
+
+See [LOCALSEND_PLUS.md](LOCALSEND_PLUS.md) for more technical details (in Chinese).
+
+### Disclaimer
+
+- This is a **fun fork**, not affiliated with the official LocalSend project.
+- I am **NOT responsible for transfer quality**: QUIC / multi-threading / plain-text changes may
+  introduce unknown issues. Use at your own risk.
+- This project **may be abandoned at any time**. No maintenance commitment, no issue-response guarantee.
+- But **everyone is welcome to fork it** — modify it however you like. Have fun! 🎉
+- If you installed an older build, you may need to uninstall and reinstall when the signature mismatches (personal signing key).
+
+### Building
+
+Same as upstream, from the `app` directory:
 
 ```bash
-appimage-builder --recipe AppImageBuilder.yml
+flutter pub get
+flutter run        # run in dev mode
+flutter build apk  # Android
+flutter build windows
+flutter build linux
 ```
 
-**Snap**
+> Note: a Rust toolchain is required (1.97.1 per `rust-toolchain.toml`).
+> The QUIC backend is gated behind the Cargo feature `quic` and is **not** part of `full` by default;
+> enable the feature explicitly if you want full QUIC support.
 
-Instructions in [localsend/snap/README.md](https://github.com/localsend/snap/blob/main/README.md)
+### License
 
-## Contributors
-
-<a href="https://github.com/localsend/localsend/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=localsend/localsend"  alt="Localsend Contributors"/>
-</a>
+[Apache License 2.0](LICENSE). Upstream copyright belongs to [Tien Do Nam](https://github.com/Tienisto)
+and the LocalSend contributors. Modifications in this fork are also released under Apache 2.0.
