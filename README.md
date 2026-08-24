@@ -40,7 +40,7 @@ LocalSend+ 基于开源的 [LocalSend](https://github.com/localsend/localsend)�
 - 我**不对传输质量负责**：QUIC / 多线程 / 明文等改动可能引入未知问题，请自行评估风险后再用。
 - 项目**随时可能停更**，没有维护承诺，也没有 issue 响应保证。
 - 但**欢迎所有人 fork**：想怎么改怎么改，开心就好 🎉
-- 🤖 本项目的**所有 Coding 工作由 AI（Goose）完成**，**不保证代码没有问题**——遇到 bug 很正常，请自行 review 源码后再用。
+- 🤖 开发者标注：**Goose**。本项目的**所有 Coding 工作由 AI（DeepSeek-V4-Pro）完成**，**不保证代码没有问题**——遇到 bug 很正常，请自行 review 源码后再用。
 - 已安装旧版本的用户升级时若提示"签名不一致"，请卸载后重装（个人签名密钥）。
 
 ### 构建
@@ -101,7 +101,7 @@ See [LOCALSEND_PLUS.md](LOCALSEND_PLUS.md) for more technical details (in Chines
   introduce unknown issues. Use at your own risk.
 - This project **may be abandoned at any time**. No maintenance commitment, no issue-response guarantee.
 - But **everyone is welcome to fork it** — modify it however you like. Have fun! 🎉
-- 🤖 **All coding work in this project was done by an AI (Goose)**. **Correctness is not guaranteed** — bugs are to be expected; review the source code before using it.
+- 🤖 Developer: **Goose**. **All coding work in this project was done by an AI (DeepSeek-V4-Pro)**. **Correctness is not guaranteed** — bugs are to be expected; review the source code before using it.
 - If you installed an older build, you may need to uninstall and reinstall when the signature mismatches (personal signing key).
 
 ### Building
