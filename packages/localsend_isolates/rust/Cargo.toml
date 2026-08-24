@@ -13,7 +13,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 anyhow = "1.0"
 bytes = "1.12"
 flutter_rust_bridge = { version = "=2.12.0", features = ["uuid"] }
-localsend = { path = "../../core", features = ["full", "quic"] }
+localsend = { path = "../../core", features = ["full"] }
 tokio = { version = "1.53", features = ["full"] }
 tokio-util = "0.7.19"
 tracing = "0.1.44"
@@ -22,3 +22,8 @@ uuid = { version = "1.24.0", features = ["v4"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 tracing-android = "0.2"
+
+# QUIC transport is part of the default build so that `flutter build` produces binaries with QUIC enabled out of the box (no extra feature flags needed).
+[features]
+default = ["quic"]
+quic = ["localsend/quic"]
