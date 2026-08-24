@@ -204,6 +204,7 @@ async fn send_inner(
                 file_id,
                 token,
                 body,
+                0,
                 cancel.token.clone(),
             )
             .await

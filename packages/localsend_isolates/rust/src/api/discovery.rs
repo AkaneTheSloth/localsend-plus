@@ -266,9 +266,7 @@ impl RsDiscovery {
                     DiscoveryEvent::Discovered { device } | DiscoveryEvent::Updated { device },
                 ) => device,
                 Some(DiscoveryEvent::MulticastFailed) => {
-                    tracing::error!(
-                        "Multicast sockets failed, ending the discovery event stream"
-                    );
+                    tracing::error!("Multicast sockets failed, ending the discovery event stream");
                     break;
                 }
                 None => break,

@@ -31,12 +31,17 @@ class HttpUploadFile {
   final List<int>? fileBytes;
   final int fileSize;
 
+  /// Bytes already persisted by the receiver in a previous attempt; the
+  /// upload continues from this position (resume).
+  final BigInt offset;
+
   HttpUploadFile({
     required this.remoteFileToken,
     required this.fileId,
     required this.filePath,
     required this.fileBytes,
     required this.fileSize,
+    this.offset = BigInt.zero,
   });
 }
 
@@ -160,6 +165,10 @@ Future<void> setupHttpUploadIsolate(
             final filePath = file.filePath;
             final isContentUri = filePath?.startsWith('content://') ?? false;
 
+            // Resume offset: how many bytes the receiver already has. Adjusted
+            // below when the receiver reports a different persisted size (409).
+            var offset = file.offset;
+
             for (var attempt = 1; ; attempt++) {
               // The file descriptor is consumed by the upload, so a fresh one
               // is needed for every attempt.
@@ -174,6 +183,7 @@ Future<void> setupHttpUploadIsolate(
                       path: !isContentUri ? filePath : null,
                       fileDescriptor: fileDescriptor,
                       contentLength: file.fileSize,
+                      offset: offset,
                       target: uploadTask.device,
                       remoteSessionId: uploadTask.remoteSessionId,
                       fileId: file.fileId,
@@ -193,11 +203,22 @@ Future<void> setupHttpUploadIsolate(
                     );
                 break;
               } on RsHttpClientError_StatusCode catch (e) {
+                if (e.status == 409) {
+                  // Offset mismatch: the receiver reports how many bytes it has
+                  // already persisted. Resume from there on the next attempt.
+                  final persisted = int.tryParse(e.message ?? '');
+                  if (persisted != null && persisted >= 0) {
+                    offset = BigInt.from(persisted);
+                    continue;
+                  }
+                }
                 if (e.status != 422 || attempt >= _maxUploadAttempts) {
                   rethrow;
                 }
                 // The receiver discarded the file because its checksum did not
-                // match (e.g. the file changed while being read). Send it again.
+                // match (e.g. the file changed while being read). Send it again
+                // from the start.
+                offset = BigInt.zero;
               }
             }
 

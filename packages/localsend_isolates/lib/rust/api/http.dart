@@ -74,6 +74,7 @@ abstract class RsHttpClient implements RustOpaqueInterface {
     String? path,
     int? fileDescriptor,
     required BigInt contentLength,
+    required BigInt offset,
     required RsCancellationToken cancelToken,
   });
 }

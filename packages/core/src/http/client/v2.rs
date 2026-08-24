@@ -240,6 +240,7 @@ impl LsHttpClientV2 {
         file_id: &str,
         token: &str,
         body: reqwest::Body,
+        offset: u64,
         cancel: CancellationToken,
     ) -> Result<(), ClientError> {
         let url = TargetUrl {
@@ -252,6 +253,7 @@ impl LsHttpClientV2 {
                 ("sessionId", session_id),
                 ("fileId", file_id),
                 ("token", token),
+                ("offset", &offset.to_string()),
             ],
         }
         .to_string();

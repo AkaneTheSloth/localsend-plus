@@ -33,7 +33,7 @@ use crate::api::server::*;
 use crate::api::stream::*;
 use crate::api::webrtc::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -1200,6 +1200,7 @@ fn wire__crate__api__http__RsHttpClient_upload_impl(
             let api_path = <Option<String>>::sse_decode(&mut deserializer);
             let api_file_descriptor = <Option<i32>>::sse_decode(&mut deserializer);
             let api_content_length = <u64>::sse_decode(&mut deserializer);
+            let api_offset = <u64>::sse_decode(&mut deserializer);
             let api_cancel_token = <RustOpaqueMoi<
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RsCancellationToken>,
             >>::sse_decode(&mut deserializer);
@@ -1252,6 +1253,7 @@ fn wire__crate__api__http__RsHttpClient_upload_impl(
                                 api_path,
                                 api_file_descriptor,
                                 api_content_length,
+                                api_offset,
                                 &*api_cancel_token_guard,
                             )
                             .await;
@@ -4721,10 +4723,12 @@ impl SseDecode for crate::api::server::RsServerEvent {
                 let mut var_sessionId = <String>::sse_decode(deserializer);
                 let mut var_fileId = <String>::sse_decode(deserializer);
                 let mut var_file = <crate::api::model::FileDto>::sse_decode(deserializer);
+                let mut var_offset = <u64>::sse_decode(deserializer);
                 return crate::api::server::RsServerEvent::FileUpload {
                     session_id: var_sessionId,
                     file_id: var_fileId,
                     file: var_file,
+                    offset: var_offset,
                 };
             }
             3 => {
@@ -6168,11 +6172,13 @@ impl flutter_rust_bridge::IntoDart for crate::api::server::RsServerEvent {
                 session_id,
                 file_id,
                 file,
+                offset,
             } => [
                 2.into_dart(),
                 session_id.into_into_dart().into_dart(),
                 file_id.into_into_dart().into_dart(),
                 file.into_into_dart().into_dart(),
+                offset.into_into_dart().into_dart(),
             ]
             .into_dart(),
             crate::api::server::RsServerEvent::SessionEnd { session_id, reason } => [
@@ -7544,11 +7550,13 @@ impl SseEncode for crate::api::server::RsServerEvent {
                 session_id,
                 file_id,
                 file,
+                offset,
             } => {
                 <i32>::sse_encode(2, serializer);
                 <String>::sse_encode(session_id, serializer);
                 <String>::sse_encode(file_id, serializer);
                 <crate::api::model::FileDto>::sse_encode(file, serializer);
+                <u64>::sse_encode(offset, serializer);
             }
             crate::api::server::RsServerEvent::SessionEnd { session_id, reason } => {
                 <i32>::sse_encode(3, serializer);
@@ -7886,7 +7894,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -8070,7 +8078,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

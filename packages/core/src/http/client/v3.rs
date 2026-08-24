@@ -214,6 +214,7 @@ impl LsHttpClientV3 {
         file_id: &str,
         token: &str,
         body: reqwest::Body,
+        offset: u64,
         cancel: CancellationToken,
     ) -> Result<(), ClientError> {
         let send = self
@@ -229,6 +230,7 @@ impl LsHttpClientV3 {
                         ("sessionId", &session_id),
                         ("fileId", &file_id),
                         ("token", &token),
+                        ("offset", &offset.to_string()),
                     ],
                 }
                 .to_string(),

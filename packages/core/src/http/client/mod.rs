@@ -137,22 +137,23 @@ impl LsHttpClient {
         file_id: &str,
         token: &str,
         content: model::transfer::FileContent,
+        offset: u64,
         progress: impl Fn(u64) + Send + 'static,
         cancel: tokio_util::sync::CancellationToken,
     ) -> Result<(), ClientError> {
-        let body = upload_body(content, progress);
+        let body = upload_body(content, offset, progress);
         match self {
             LsHttpClient::V2(client) => {
                 client
                     .upload(
-                        protocol, ip, port, public_key, session_id, file_id, token, body, cancel,
+                        protocol, ip, port, public_key, session_id, file_id, token, body, offset, cancel,
                     )
                     .await
             }
             LsHttpClient::V3(client) => {
                 client
                     .upload(
-                        protocol, ip, port, public_key, session_id, file_id, token, body, cancel,
+                        protocol, ip, port, public_key, session_id, file_id, token, body, offset, cancel,
                     )
                     .await
             }
@@ -177,14 +178,32 @@ impl LsHttpClient {
 /// with the cumulative number of bytes read as each chunk is sent.
 pub(super) fn upload_body(
     content: model::transfer::FileContent,
+    offset: u64,
     progress: impl Fn(u64) + Send + 'static,
 ) -> reqwest::Body {
+    // A resumed transfer skips the prefix that was already received.
+    let mut skip = offset;
     let mut sent = 0_u64;
-    let stream = ReceiverStream::new(content.into_receiver()).map(move |chunk| {
-        sent += chunk.len() as u64;
-        progress(sent);
-        Ok::<Bytes, anyhow::Error>(chunk)
-    });
+    let stream = ReceiverStream::new(content.into_receiver())
+        .map(move |mut chunk| {
+            if skip > 0 {
+                let len = chunk.len() as u64;
+                if skip >= len {
+                    skip -= len;
+                    return Bytes::new();
+                }
+                let rest = chunk.split_off(skip as usize);
+                skip = 0;
+                sent += rest.len() as u64;
+                progress(sent);
+                return rest;
+            }
+            sent += chunk.len() as u64;
+            progress(sent);
+            chunk
+        })
+        .filter(|chunk| std::future::ready(!chunk.is_empty()))
+        .map(|chunk| Ok::<Bytes, anyhow::Error>(chunk));
     reqwest::Body::wrap_stream(stream)
 }
 

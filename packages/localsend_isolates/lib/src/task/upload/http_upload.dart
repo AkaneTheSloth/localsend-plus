@@ -22,6 +22,8 @@ class HttpUploadService {
     required String? path,
     required int? fileDescriptor,
     required int contentLength,
+    BigInt offset = BigInt.zero,
+    required Device target,
     required Device target,
     required String? remoteSessionId,
     required String fileId,
@@ -46,6 +48,8 @@ class HttpUploadService {
           path: path,
           fileDescriptor: fileDescriptor,
           contentLength: BigInt.from(contentLength),
+          offset: offset,
+          cancelToken: cancelToken,
           cancelToken: cancelToken,
         )
         .forEach((event) {

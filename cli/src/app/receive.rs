@@ -199,6 +199,7 @@ impl App {
                 session_id,
                 file_id,
                 file,
+                offset: _,
                 target_tx,
             } => self.handle_file_upload(session_id, file_id, file, target_tx),
             ServerEventV2::SessionEnd { session_id, reason } => {

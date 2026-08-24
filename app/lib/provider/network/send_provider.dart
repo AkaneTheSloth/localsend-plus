@@ -608,6 +608,12 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
             filePath: file.path,
             fileBytes: file.bytes,
             fileSize: file.file.size,
+            // A retried file resumes from its last known progress instead of
+            // restarting at zero; the receiver reports the exact persisted
+            // size (409) when this estimate is off.
+            offset: BigInt.from(
+              (ref.read(fileTransferProvider).getProgress(sessionId: sessionId, fileId: file.file.id) * file.file.size).round(),
+            ),
           ),
     ];
 

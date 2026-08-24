@@ -8,7 +8,7 @@ use localsend::http::server::internal::{InternalConfig, InternalEvent};
 pub use localsend::http::server::v2::SessionEndReasonV2;
 use localsend::http::server::v2::{PrepareUploadDecisionV2, ServerEventV2};
 use localsend::http::server::web::{
-    WebConfig, WebMode as CoreWebMode, WebDownloadConfig, WebDownloadEvent,
+    WebConfig, WebDownloadConfig, WebDownloadEvent, WebMode as CoreWebMode,
 };
 pub use localsend::http::server::web::{WebI18n, WebPages};
 use localsend::http::state::ClientInfo;
@@ -54,6 +54,8 @@ pub enum RsServerEvent {
         session_id: String,
         file_id: String,
         file: FileDto,
+        /// Bytes already persisted by a previous attempt (resume offset).
+        offset: u64,
     },
 
     /// An upload session ended.
@@ -389,6 +391,7 @@ impl RsHttpServer {
                 session_id,
                 file_id,
                 file,
+                offset,
                 target_tx,
             } => {
                 self.pending_uploads
@@ -399,6 +402,7 @@ impl RsHttpServer {
                     session_id,
                     file_id,
                     file,
+                    offset,
                 })
                 .is_ok()
             }

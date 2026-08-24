@@ -228,6 +228,7 @@ async fn upload_bytes(
             file_id,
             token,
             body,
+            0,
             CancellationToken::new(),
         )
         .await;
@@ -237,6 +238,45 @@ async fn upload_bytes(
     }
 
     result
+}
+
+/// Like [upload_bytes], but resumes the upload at offset: the body must
+/// contain the bytes from that position onwards.
+async fn upload_bytes_resume(
+    client: &LsHttpClientV2,
+    port: u16,
+    session_id: &str,
+    file_id: &str,
+    token: &str,
+    bytes: &[u8],
+    offset: u64,
+) -> Result<(), ClientError> {
+    let (tx, rx) = mpsc::channel::<Bytes>(4);
+    let chunks: Vec<Vec<u8>> = bytes.chunks(1024).map(|chunk| chunk.to_vec()).collect();
+    tokio::spawn(async move {
+        for chunk in chunks {
+            if tx.send(Bytes::from(chunk)).await.is_err() {
+                break;
+            }
+        }
+    });
+    let body = localsend::reqwest::Body::wrap_stream(ReceiverStream::new(rx).map(|chunk: Bytes| {
+        Ok::<Bytes, std::io::Error>(chunk)
+    }));
+    client
+        .upload(
+            ProtocolType::Http,
+            "127.0.0.1",
+            port,
+            None,
+            session_id,
+            file_id,
+            token,
+            body,
+            offset,
+            CancellationToken::new(),
+        )
+        .await
 }
 
 fn assert_status(result: Result<impl Sized, ClientError>, expected_status: u16) {
@@ -1393,4 +1433,68 @@ async fn test_pin_too_many_attempts() {
         )
         .await;
     assert_status(result, 429);
+}
+
+#[tokio::test]
+async fn test_upload_resumes_from_offset() {
+    let save_dir = std::env::temp_dir().join(format!("localsend-test-{}", uuid::Uuid::new_v4()));
+    tokio::fs::create_dir_all(&save_dir).await.unwrap();
+
+    let server = start_test_server(None, true, Some(save_dir.clone())).await;
+    let client = LsHttpClientV2::try_new_without_cert().unwrap();
+
+    let bytes: Vec<u8> = (0..50_000u32).map(|i| i as u8).collect();
+    let mut file = file_dto("file-a", "a.bin", bytes.len() as u64);
+    file.sha256 = Some(sha256_hex(&bytes));
+
+    let response = client
+        .prepare_upload(
+            ProtocolType::Http,
+            "127.0.0.1",
+            server.port,
+            None,
+            prepare_upload_request(&[file]),
+            None,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap()
+        .response
+        .unwrap();
+
+    // A previous attempt left a partial file at the destination (the test
+    // server saves under the file ID).
+    tokio::fs::write(save_dir.join("file-a"), &bytes[..25_000]).await.unwrap();
+
+    // An offset that does not match the persisted size is rejected with 409
+    // (the body reports the actual size, 25000), so the sender can adjust.
+    let result = upload_bytes_resume(
+        &client,
+        server.port,
+        &response.session_id,
+        "file-a",
+        &response.files["file-a"],
+        &bytes[20_000..],
+        20_000,
+    )
+    .await;
+    assert_status(result, 409);
+
+    // Resume from the persisted offset: the tail is appended to the partial.
+    upload_bytes_resume(
+        &client,
+        server.port,
+        &response.session_id,
+        "file-a",
+        &response.files["file-a"],
+        &bytes[25_000..],
+        25_000,
+    )
+    .await
+    .unwrap();
+
+    // The checksum covers the whole file, so the resumed transfer is verified.
+    assert_eq!(tokio::fs::read(save_dir.join("file-a")).await.unwrap(), bytes);
+
+    tokio::fs::remove_dir_all(&save_dir).await.unwrap();
 }

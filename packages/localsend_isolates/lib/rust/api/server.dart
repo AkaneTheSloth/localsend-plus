@@ -204,6 +204,9 @@ sealed class RsServerEvent with _$RsServerEvent {
     required String sessionId,
     required String fileId,
     required FileDto file,
+
+    /// Bytes already persisted by a previous attempt (resume offset).
+    required BigInt offset,
   }) = RsServerEvent_FileUpload;
 
   /// An upload session ended.

@@ -179,6 +179,9 @@ class MainActivity : FlutterActivity() {
             result.error("INVALID_ARGUMENT", "Expected a content:// URI", null)
             return
         }
+        // A resumed transfer opens without truncating ("rwt") so the already
+        // persisted prefix is kept; the writer continues at the reported offset.
+        val truncate = call.argument<Boolean>("truncate") ?: true
 
         try {
             val parcelFileDescriptor = contentResolver.openFileDescriptor(uri, "r")
@@ -278,11 +281,15 @@ class MainActivity : FlutterActivity() {
             result.error("INVALID_ARGUMENT", "Expected a content:// URI", null)
             return
         }
+        // A resumed transfer opens without truncating ("rwt") so the already
+        // persisted prefix is kept; the writer continues at the reported offset.
+        val truncate = call.argument<Boolean>("truncate") ?: true
 
         try {
-            // "wt" is write + truncate. A document provider may ignore the
-            // truncation, so the writer additionally shortens the file itself.
-            val parcelFileDescriptor = contentResolver.openFileDescriptor(uri, "wt")
+            // "wt" is write + truncate; "rwt" keeps the content for a resumed
+            // transfer. A document provider may ignore the truncation, so the
+            // writer additionally shortens the file itself.
+            val parcelFileDescriptor = contentResolver.openFileDescriptor(uri, if (truncate) "wt" else "rwt")
             if (parcelFileDescriptor == null) {
                 result.error("OPEN_FAILED", "The content provider did not return a file descriptor", null)
                 return

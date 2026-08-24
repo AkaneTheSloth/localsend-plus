@@ -184,6 +184,7 @@ abstract class RustLibApi extends BaseApi {
     String? path,
     int? fileDescriptor,
     required BigInt contentLength,
+    required BigInt offset,
     required RsCancellationToken cancelToken,
   });
 
@@ -947,6 +948,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     String? path,
     int? fileDescriptor,
     required BigInt contentLength,
+    required BigInt offset,
     required RsCancellationToken cancelToken,
   }) {
     final sink = RustStreamSink<RsUploadEvent>();
@@ -971,6 +973,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             sse_encode_opt_String(path, serializer);
             sse_encode_opt_box_autoadd_i_32(fileDescriptor, serializer);
             sse_encode_u_64(contentLength, serializer);
+            sse_encode_u_64(offset, serializer);
             sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken(cancelToken, serializer);
             pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19, port: port_);
           },
@@ -979,7 +982,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             decodeErrorData: null,
           ),
           constMeta: kCrateApiHttpRsHttpClientUploadConstMeta,
-          argValues: [that, sink, protocol, ip, port, publicKey, sessionId, fileId, token, binary, path, fileDescriptor, contentLength, cancelToken],
+          argValues: [
+            that,
+            sink,
+            protocol,
+            ip,
+            port,
+            publicKey,
+            sessionId,
+            fileId,
+            token,
+            binary,
+            path,
+            fileDescriptor,
+            contentLength,
+            offset,
+            cancelToken,
+          ],
           apiImpl: this,
         ),
       ),
@@ -1003,6 +1022,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       'path',
       'fileDescriptor',
       'contentLength',
+      'offset',
       'cancelToken',
     ],
   );
@@ -3229,6 +3249,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sessionId: dco_decode_String(raw[1]),
           fileId: dco_decode_String(raw[2]),
           file: dco_decode_box_autoadd_file_dto(raw[3]),
+          offset: dco_decode_u_64(raw[4]),
         );
       case 3:
         return RsServerEvent_SessionEnd(
@@ -4602,7 +4623,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_sessionId = sse_decode_String(deserializer);
         var var_fileId = sse_decode_String(deserializer);
         var var_file = sse_decode_box_autoadd_file_dto(deserializer);
-        return RsServerEvent_FileUpload(sessionId: var_sessionId, fileId: var_fileId, file: var_file);
+        var var_offset = sse_decode_u_64(deserializer);
+        return RsServerEvent_FileUpload(sessionId: var_sessionId, fileId: var_fileId, file: var_file, offset: var_offset);
       case 3:
         var var_sessionId = sse_decode_String(deserializer);
         var var_reason = sse_decode_session_end_reason_v_2(deserializer);
@@ -5971,11 +5993,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_box_autoadd_register_dto_v_2(info, serializer);
         sse_encode_opt_String(certFingerprint, serializer);
         sse_encode_Map_String_file_dto_None(files, serializer);
-      case RsServerEvent_FileUpload(sessionId: final sessionId, fileId: final fileId, file: final file):
+      case RsServerEvent_FileUpload(sessionId: final sessionId, fileId: final fileId, file: final file, offset: final offset):
         sse_encode_i_32(2, serializer);
         sse_encode_String(sessionId, serializer);
         sse_encode_String(fileId, serializer);
         sse_encode_box_autoadd_file_dto(file, serializer);
+        sse_encode_u_64(offset, serializer);
       case RsServerEvent_SessionEnd(sessionId: final sessionId, reason: final reason):
         sse_encode_i_32(3, serializer);
         sse_encode_String(sessionId, serializer);
@@ -6493,6 +6516,7 @@ class RsHttpClientImpl extends RustOpaque implements RsHttpClient {
     String? path,
     int? fileDescriptor,
     required BigInt contentLength,
+    required BigInt offset,
     required RsCancellationToken cancelToken,
   }) => RustLib.instance.api.crateApiHttpRsHttpClientUpload(
     that: this,
@@ -6507,6 +6531,7 @@ class RsHttpClientImpl extends RustOpaque implements RsHttpClient {
     path: path,
     fileDescriptor: fileDescriptor,
     contentLength: contentLength,
+    offset: offset,
     cancelToken: cancelToken,
   );
 }

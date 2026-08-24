@@ -83,6 +83,10 @@ pub enum ServerEventV2 {
         /// The metadata of the file being uploaded.
         file: FileDto,
 
+        /// Number of bytes already persisted by a previous attempt; the body
+        /// continues from this position.
+        offset: u64,
+
         /// Channel to send the target the file content should be written to.
         target_tx: oneshot::Sender<FileUploadTarget>,
     },
@@ -378,6 +382,10 @@ pub(crate) async fn upload(
         ));
     };
 
+    // Resume offset: the number of bytes of the file already persisted by a
+    // previous attempt. The sender continues the body from this position.
+    let offset: u64 = query.get("offset").and_then(|value| value.parse().ok()).unwrap_or(0);
+
     // Validate the request and mark the file as in progress.
     let file_dto = {
         let mut slot = v2.session.lock().await;
@@ -419,6 +427,7 @@ pub(crate) async fn upload(
         session_id: session_id.clone(),
         file_id: file_id.clone(),
         file: file_dto,
+        offset,
         target_tx,
     };
     if v2.event_tx.send(event).await.is_err() {
@@ -437,6 +446,7 @@ pub(crate) async fn upload(
         file_size,
         expected_sha256.as_deref(),
         timestamps,
+        offset,
     )
     .await;
 
@@ -448,6 +458,12 @@ pub(crate) async fn upload(
         SaveResult::HashMismatch => Err(AppError::Message(
             StatusCode::UNPROCESSABLE_ENTITY,
             "Checksum mismatch".to_string(),
+        )),
+        // The sender's offset did not match the persisted size; the body carries
+        // the actual number of bytes so the sender can resume from there.
+        SaveResult::OffsetMismatch(actual) => Err(AppError::Message(
+            StatusCode::CONFLICT,
+            actual.to_string(),
         )),
     }
 }
@@ -666,6 +682,9 @@ async fn finalize_file(v2: &V2State, session_id: &str, file_id: &str, result: Sa
                     SaveResult::HashMismatch if file.attempts < MAX_UPLOAD_ATTEMPTS => {
                         FileStatusV2::Pending
                     }
+                    // An offset mismatch tells the sender the persisted size; it
+                    // retries with the corrected offset, so keep the file retryable.
+                    SaveResult::OffsetMismatch(_) => FileStatusV2::Pending,
                     SaveResult::Failed | SaveResult::HashMismatch => FileStatusV2::Failed,
                 };
             }

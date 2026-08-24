@@ -4,8 +4,8 @@ use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 pub use localsend::http::client::{ClientError, LsHttpClientVersion};
 pub use localsend::http::dto::{
-    PrepareUploadRequestDto, PrepareUploadResponseDto, PrepareUploadResult,
-    RegisterDto, RegisterResponseDto,
+    PrepareUploadRequestDto, PrepareUploadResponseDto, PrepareUploadResult, RegisterDto,
+    RegisterResponseDto,
 };
 use localsend::model::discovery::ProtocolType;
 use localsend::reqwest;
@@ -108,6 +108,7 @@ impl RsHttpClient {
         path: Option<String>,
         file_descriptor: Option<i32>,
         content_length: u64,
+        offset: u64,
         cancel_token: &RsCancellationToken,
     ) {
         let result = async {
@@ -115,8 +116,10 @@ impl RsHttpClient {
             let last_emit = std::cell::Cell::new(None::<std::time::Instant>);
             let progress_sink = sink.clone();
             let progress = move |sent| {
+                // A resumed upload reports the absolute position of the file.
+                let absolute = offset + sent;
                 let now = std::time::Instant::now();
-                let is_final = sent >= content_length;
+                let is_final = absolute >= content_length;
                 if !is_final {
                     if let Some(last) = last_emit.get() {
                         if now.duration_since(last) < std::time::Duration::from_millis(20) {
@@ -128,7 +131,7 @@ impl RsHttpClient {
                 let progress = if content_length == 0 {
                     1.0
                 } else {
-                    (sent as f64 / content_length as f64).min(1.0)
+                    (absolute as f64 / content_length as f64).min(1.0)
                 };
                 let _ = progress_sink.add(RsUploadEvent::Progress { progress });
             };
@@ -143,6 +146,7 @@ impl RsHttpClient {
                     file_id,
                     token,
                     content,
+                    offset,
                     progress,
                     cancel_token.inner.clone(),
                 )

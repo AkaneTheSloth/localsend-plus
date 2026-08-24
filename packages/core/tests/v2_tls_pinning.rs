@@ -222,6 +222,7 @@ async fn upload_bytes(
             file_id,
             token,
             body,
+            0,
             CancellationToken::new(),
         )
         .await;

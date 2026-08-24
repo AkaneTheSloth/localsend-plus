@@ -218,10 +218,14 @@ class HttpServerFileUploadEvent extends HttpServerEvent {
   final String fileId;
   final FileDto file;
 
+  /// Bytes already persisted by a previous attempt (resume offset).
+  final BigInt offset;
+
   HttpServerFileUploadEvent({
     required this.sessionId,
     required this.fileId,
     required this.file,
+    this.offset = BigInt.zero,
   });
 }
 
@@ -467,7 +471,7 @@ Future<void> setupHttpServerIsolate(
                       files: files,
                     ),
                   );
-                case RsServerEvent_FileUpload(:final sessionId, :final fileId, :final file):
+                case RsServerEvent_FileUpload(:final sessionId, :final fileId, :final file, :final offset):
                   final session = holder.session;
                   if (session == null || session.config.sessionId != sessionId || !session.config.fileNameMap.containsKey(fileId)) {
                     _logger.warning('Rejecting upload of file $fileId: no matching active session');
@@ -489,6 +493,7 @@ Future<void> setupHttpServerIsolate(
                         sessionId: sessionId,
                         fileId: fileId,
                         file: file,
+                        offset: offset,
                       ),
                     );
 
@@ -498,6 +503,7 @@ Future<void> setupHttpServerIsolate(
                       sessionId: sessionId,
                       fileId: fileId,
                       file: file,
+                      offset: offset,
                       emit: emit,
                     );
                   });
@@ -622,6 +628,7 @@ Future<void> _handleFileUpload({
   required String sessionId,
   required String fileId,
   required FileDto file,
+  required BigInt offset,
   required void Function(HttpServerEvent event) emit,
 }) async {
   final config = session.config;
@@ -650,7 +657,7 @@ Future<void> _handleFileUpload({
     // attempt overwrites instead of creating a numbered version.
     final previous = session.targets[fileId];
     target = previous != null
-        ? await reopenFileSaveTarget(previous)
+        ? await reopenFileSaveTarget(previous, resume: offset > BigInt.zero)
         : await prepareFileSaveTarget(
             destinationDirectory: config.destinationDirectory,
             cacheDirectory: config.cacheDirectory,
