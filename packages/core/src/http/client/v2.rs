@@ -481,4 +481,117 @@ impl LsHttpClientV2 {
 
         Ok(total_bytes)
     }
+
+    /// Downloads a byte range of a file (Download API), for resumable and
+    /// multi-threaded downloads.
+    ///
+    /// GET /api/localsend/v2/download?sessionId=...&fileId=... with a
+    /// `Range: bytes=start-end` header. The server answers 206 Partial Content
+    /// (or 200 when the range is ignored). `start` and `end` are inclusive.
+    pub async fn download_range(
+        &self,
+        protocol: ProtocolType,
+        ip: &str,
+        port: u16,
+        session_id: &str,
+        file_id: &str,
+        start: u64,
+        end: u64,
+    ) -> Result<Response, ClientError> {
+        let url = TargetUrl {
+            version: ApiVersion::V2,
+            protocol: protocol.as_str(),
+            host: ip.to_string(),
+            port,
+            path: "/download",
+            params: &[("sessionId", session_id), ("fileId", file_id)],
+        }
+        .to_string();
+
+        let res = self
+            .client
+            .get(&url)
+            .header("Range", format!("bytes={start}-{end}"))
+            .send()
+            .await?;
+
+        if res.status() != StatusCode::PARTIAL_CONTENT && res.status() != StatusCode::OK {
+            return res.into_error().await;
+        }
+
+        Ok(res)
+    }
+
+    /// Downloads `file` of `file_size` bytes using `threads` concurrent
+    /// byte-range requests, writing the chunks to `writer` in order.
+    ///
+    /// This is the LocalSend+ multi-threaded transfer path: a single large file
+    /// is split into `threads` ranges fetched over independent connections
+    /// (and, once enabled, independent QUIC streams), so one stalled connection
+    /// does not block the others.
+    ///
+    /// Falls back to a single sequential download for empty files or a single
+    /// thread.
+    pub async fn download_to_writer_parallel<W: tokio::io::AsyncWrite + Unpin>(
+        &self,
+        protocol: ProtocolType,
+        ip: &str,
+        port: u16,
+        session_id: &str,
+        file_id: &str,
+        file_size: u64,
+        threads: usize,
+        writer: &mut W,
+    ) -> Result<u64, ClientError> {
+        let threads = threads.clamp(1, 64);
+        if file_size == 0 || threads == 1 {
+            return self
+                .download_to_writer(protocol, ip, port, session_id, file_id, writer)
+                .await;
+        }
+
+        let chunk = file_size.div_ceil(threads as u64);
+        let mut handles = Vec::with_capacity(threads);
+        for i in 0..threads {
+            let start = i as u64 * chunk;
+            if start >= file_size {
+                break;
+            }
+            let end = (start + chunk - 1).min(file_size - 1);
+            let url = TargetUrl {
+                version: ApiVersion::V2,
+                protocol: protocol.as_str(),
+                host: ip.to_string(),
+                port,
+                path: "/download",
+                params: &[("sessionId", session_id), ("fileId", file_id)],
+            }
+            .to_string();
+            let client = self.client.clone();
+            handles.push(tokio::spawn(async move {
+                let res = client
+                    .get(&url)
+                    .header("Range", format!("bytes={start}-{end}"))
+                    .send()
+                    .await?;
+                if res.status() != StatusCode::PARTIAL_CONTENT && res.status() != StatusCode::OK {
+                    return res.into_error::<Vec<u8>>().await;
+                }
+                let bytes = res.bytes().await?;
+                Ok::<Vec<u8>, ClientError>(bytes.to_vec())
+            }));
+        }
+
+        let mut total = 0u64;
+        for handle in handles {
+            let bytes = handle
+                .await
+                .map_err(|_| ClientError::Other(anyhow::anyhow!("download task failed")))??;
+            writer.write_all(&bytes).await?;
+            total += bytes.len() as u64;
+        }
+        writer.flush().await?;
+
+        Ok(total)
+    }
 }

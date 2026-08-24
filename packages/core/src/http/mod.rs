@@ -5,6 +5,9 @@ pub mod dto;
 pub mod dto_v2;
 pub mod server;
 pub mod state;
+#[cfg(feature = "quic")]
+pub mod quic;
+pub mod transport;
 
 #[derive(Debug, Error)]
 #[error("{status};{message:?}")]

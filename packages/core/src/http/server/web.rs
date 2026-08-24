@@ -447,13 +447,34 @@ pub(crate) async fn download(
         .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
     let size = file.size;
-    let body = receiver_stream_body(content.into_receiver());
+
+    // LocalSend+ supports byte-range requests so downloads can resume after a
+    // network drop and can be fetched in parallel by a multi-threaded client.
+    let range = parse_single_range(req.headers().get(http::header::RANGE), size);
+    let (status, body, content_length, content_range) = match range {
+        Some((start, end)) => {
+            let length = end - start + 1;
+            (
+                StatusCode::PARTIAL_CONTENT,
+                file_content_body(content, start, Some(length)).await,
+                length,
+                Some(format!("bytes {start}-{end}/{size}")),
+            )
+        }
+        None => (
+            StatusCode::OK,
+            file_content_body(content, 0, None).await,
+            size,
+            None,
+        ),
+    };
 
     // The file name may be inside directories.
     let file_name = file.file_name.replace('/', "-");
     let encoded_file_name = utf8_percent_encode(&file_name, FILE_NAME_ENCODE_SET);
 
     let mut response = Response::new(body);
+    *response.status_mut() = status;
     let headers = response.headers_mut();
     headers.insert(
         http::header::CONTENT_TYPE,
@@ -464,7 +485,15 @@ pub(crate) async fn download(
         http::HeaderValue::from_str(&format!("attachment; filename=\"{encoded_file_name}\""))
             .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?,
     );
-    headers.insert(http::header::CONTENT_LENGTH, http::HeaderValue::from(size));
+    headers.insert(http::header::CONTENT_LENGTH, http::HeaderValue::from(content_length));
+    headers.insert(http::header::ACCEPT_RANGES, http::HeaderValue::from_static("bytes"));
+    if let Some(content_range) = content_range {
+        headers.insert(
+            http::header::CONTENT_RANGE,
+            http::HeaderValue::from_str(&content_range)
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?,
+        );
+    }
 
     Ok(response)
 }
@@ -527,6 +556,117 @@ async fn file_list_response(
 fn receiver_stream_body(binary_rx: mpsc::Receiver<Bytes>) -> BoxedBody {
     let stream = ReceiverStream::new(binary_rx)
         .map(|chunk| Ok::<_, std::io::Error>(Frame::data(Bytes::from(chunk))));
+    StreamBody::new(stream).boxed()
+}
+
+/// Parses an HTTP `Range: bytes=start-end` header for a single byte range.
+///
+/// Returns the inclusive `(start, end)` bounds, clamped to `size`. `None` is
+/// returned for an absent header, an unsatisfiable range, or any multi-range,
+/// suffix-only or invalid form — callers then fall back to a full 200 response.
+fn parse_single_range(range: Option<&http::HeaderValue>, size: u64) -> Option<(u64, u64)> {
+    let range = range?.to_str().ok()?;
+    let (unit, bounds) = range.split_once('=')?;
+    if unit.trim() != "bytes" || bounds.contains(',') {
+        return None;
+    }
+    let (start, end) = bounds.split_once('-')?;
+    let start: u64 = start.trim().parse().ok()?;
+    let end: u64 = if end.trim().is_empty() {
+        size.saturating_sub(1)
+    } else {
+        end.trim().parse().ok()?
+    };
+    if start >= size || end < start {
+        return None;
+    }
+    Some((start, end.min(size - 1)))
+}
+
+/// Builds a response body from [`FileContent`], starting at `offset` and
+/// limited to `length` bytes (`None` = to end of file).
+///
+/// Path- and descriptor-backed content is streamed straight from the file
+/// without an intermediate channel (one fewer copy per chunk); in-memory
+/// stream content is skipped/capped to honour the requested range.
+async fn file_content_body(content: FileContent, offset: u64, length: Option<u64>) -> BoxedBody {
+    match content {
+        FileContent::Stream(mut rx) => {
+            let (tx, body_rx) = mpsc::channel::<Bytes>(16);
+            tokio::spawn(async move {
+                let mut position = 0u64;
+                let mut emitted = 0u64;
+                'outer: while let Some(chunk) = rx.recv().await {
+                    let mut start = 0usize;
+                    let mut end = chunk.len();
+                    if position < offset {
+                        start = ((offset - position).min(chunk.len() as u64)) as usize;
+                    }
+                    if let Some(length) = length {
+                        let remaining = length - emitted;
+                        if remaining == 0 {
+                            break 'outer;
+                        }
+                        end = start + (remaining as usize).min(end - start);
+                    }
+                    if start < end {
+                        let slice = chunk.slice(start..end);
+                        emitted += (end - start) as u64;
+                        if tx.send(slice).await.is_err() {
+                            break;
+                        }
+                    }
+                    position += chunk.len() as u64;
+                }
+            });
+            receiver_stream_body(body_rx)
+        }
+        FileContent::Path(path) => match tokio::fs::File::open(&path).await {
+            Ok(file) => file_reader_body(file, offset, length).await,
+            Err(err) => {
+                tracing::error!("Failed to open {} for download: {err}", path.display());
+                error_body()
+            }
+        },
+        #[cfg(target_os = "android")]
+        FileContent::Fd(fd) => {
+            use std::os::fd::FromRawFd;
+
+            // SAFETY: the descriptor is owned by this transfer; wrapping it in
+            // a File transfers ownership so it is closed once reading finishes.
+            let std_file = unsafe { std::fs::File::from_raw_fd(fd) };
+            let file = tokio::fs::File::from_std(std_file);
+            file_reader_body(file, offset, length).await
+        }
+    }
+}
+
+/// Streams an open file (optionally from `offset`, limited to `length` bytes)
+/// directly as a response body, without an intermediate chunk channel.
+async fn file_reader_body(
+    mut file: tokio::fs::File,
+    offset: u64,
+    length: Option<u64>,
+) -> BoxedBody {
+    use tokio::io::AsyncSeekExt;
+
+    if offset > 0 {
+        if let Err(err) = file.seek(std::io::SeekFrom::Start(offset)).await {
+            tracing::error!("Failed to seek file for range download: {err}");
+            return error_body();
+        }
+    }
+    let reader = tokio::io::AsyncReadExt::take(file, length.unwrap_or(u64::MAX));
+    let stream = tokio_util::io::ReaderStream::new(reader)
+        .map(|res| res.map(|bytes| Frame::data(bytes)));
+    StreamBody::new(stream).boxed()
+}
+
+/// A response body that fails immediately, used when a file cannot be opened.
+fn error_body() -> BoxedBody {
+    let stream = tokio_stream::once(Err::<Frame<Bytes>, std::io::Error>(
+        std::io::Error::other("failed to open file for download"),
+    ));
     StreamBody::new(stream).boxed()
 }
 

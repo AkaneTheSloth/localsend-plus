@@ -1,5 +1,5 @@
 name: localsend_app
-description: An open source cross-platform alternative to AirDrop
+description: LocalSend+ — AirDrop alternative with QUIC, multi-threaded, resumable transfers (Goose x Akane)
 homepage: https://localsend.org/
 publish_to: "none"
 resolution: workspace

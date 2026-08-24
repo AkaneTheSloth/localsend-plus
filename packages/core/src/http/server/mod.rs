@@ -221,6 +221,13 @@ pub async fn start_with_port(
     // skips the install when a provider exists) does not race the accept task.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
+    // LocalSend+: report the hardware acceleration path and the transport
+    // fallback status once, at server startup.
+    crate::util::accel::log_detected();
+    if !crate::http::transport::quic_compiled_in() {
+        tracing::info!("QUIC transport not compiled in; bulk transfers fall back to TCP");
+    }
+
     let ipv4_socket_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), port);
     let info = Arc::new(Mutex::new(info));
     let state = AppState::new(info.clone(), internal_config, v2_config, web_config);
