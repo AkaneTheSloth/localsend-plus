@@ -658,7 +658,7 @@ async fn file_reader_body(
     }
     let reader = tokio::io::AsyncReadExt::take(file, length.unwrap_or(u64::MAX));
     let stream = tokio_util::io::ReaderStream::new(reader)
-        .map(|res| res.map(|bytes| Frame::data(bytes)));
+        .map(|res| res.map(Frame::data));
     StreamBody::new(stream).boxed()
 }
 

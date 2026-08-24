@@ -54,8 +54,7 @@ impl QuicServerEndpoint {
             quinn::crypto::rustls::QuicServerConfig::try_from(rustls_config)
                 .map_err(|e| format!("failed to build QUIC crypto config: {e}"))?,
         );
-        let mut server_config = quinn::ServerConfig::with_crypto(quic_crypto);
-        server_config.alpn_protocols = vec![ALPN.to_vec()];
+        let server_config = quinn::ServerConfig::with_crypto(quic_crypto);
 
         let endpoint = quinn::Endpoint::server(server_config, addr)
             .map_err(|e| format!("failed to bind QUIC endpoint: {e}"))?;
@@ -83,8 +82,12 @@ fn rustls_server_config(cert: &str, key: &str) -> Result<rustls::ServerConfig, S
     ];
     let key = PrivateKeyDer::from_pem_slice(key.as_bytes()).map_err(|e| e.to_string())?;
 
-    rustls::ServerConfig::builder()
+    let mut config = rustls::ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
-        .map_err(|e| format!("failed to build QUIC TLS config: {e}"))
+        .map_err(|e| format!("failed to build QUIC TLS config: {e}"))?;
+    // ALPN lives on the TLS layer in quinn 0.11; the crypto wrapper reads it
+    // from here when the connection is negotiated.
+    config.alpn_protocols = vec![ALPN.to_vec()];
+    Ok(config)
 }
