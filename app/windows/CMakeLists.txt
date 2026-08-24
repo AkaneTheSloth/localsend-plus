@@ -2,6 +2,13 @@
 cmake_minimum_required(VERSION 3.14)
 project(localsend_app LANGUAGES CXX)
 
+# LocalSend+ (Windows): MSVC's default source charset is the system ANSI code
+# page (e.g. 936 on zh-CN systems), so UTF-8 characters in plugin sources fail
+# the build with C4819 under /WX. Force UTF-8 source and execution charsets.
+if(MSVC)
+  add_compile_options(/utf-8)
+endif()
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "localsend_app")
