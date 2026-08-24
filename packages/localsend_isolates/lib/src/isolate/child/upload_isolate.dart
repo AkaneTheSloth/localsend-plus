@@ -41,7 +41,7 @@ class HttpUploadFile {
     required this.filePath,
     required this.fileBytes,
     required this.fileSize,
-    this.offset = BigInt.zero,
+    required this.offset,
   });
 }
 

@@ -225,7 +225,7 @@ class HttpServerFileUploadEvent extends HttpServerEvent {
     required this.sessionId,
     required this.fileId,
     required this.file,
-    this.offset = BigInt.zero,
+    required this.offset,
   });
 }
 

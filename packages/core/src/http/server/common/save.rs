@@ -142,6 +142,7 @@ pub(crate) async fn save_req_to_target(
             },
             #[cfg(target_os = "android")]
             FileUploadTarget::Fd { fd, .. } => {
+                use std::os::fd::FromRawFd;
                 // SAFETY: the descriptor is owned by this transfer, but we only
                 // probe its size through a duplicated handle and forget it again,
                 // so ownership stays with the writer below.
