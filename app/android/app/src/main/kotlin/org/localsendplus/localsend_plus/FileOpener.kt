@@ -1,4 +1,4 @@
-package org.localsend.localsend_app
+package org.localsendplus.localsend_plus
 
 import android.content.Context
 import android.content.Intent

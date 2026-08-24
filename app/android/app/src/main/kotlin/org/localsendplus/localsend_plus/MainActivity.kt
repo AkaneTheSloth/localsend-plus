@@ -1,4 +1,4 @@
-package org.localsend.localsend_app
+package org.localsendplus.localsend_plus
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -22,7 +22,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 
-private const val CHANNEL = "org.localsend.localsend_app/localsend"
+private const val CHANNEL = "org.localsendplus.localsend_plus/localsend"
 private const val REQUEST_CODE_PICK_DIRECTORY = 1
 private const val REQUEST_CODE_PICK_DIRECTORY_PATH = 2
 private const val REQUEST_CODE_PICK_FILE = 3
