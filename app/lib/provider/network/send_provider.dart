@@ -38,6 +38,27 @@ import 'package:uuid/uuid.dart';
 const _uuid = Uuid();
 final _logger = Logger('Send');
 
+/// How long an upload may go without a single event from the isolate before it
+/// is treated as stalled and aborted.
+///
+/// A peer that stops reading (busy, suspended, or behind a network that drops
+/// its address) leaves the sender's write blocked forever: there is no request
+/// timeout on uploads, because a legitimate multi-gigabyte transfer also sends
+/// no response for minutes. The progress stream is the only signal that can
+/// tell the two apart, so the watchdog runs on it instead.
+const _uploadStallTimeout = Duration(seconds: 120);
+
+/// Upper bound for the short control-plane requests (session setup, cancel).
+/// These answer in milliseconds on a working link, so anything approaching
+/// this is a peer whose advertised address does not reach it.
+const _controlRequestTimeout = Duration(seconds: 15);
+
+const _uploadStallMessage =
+    'Transfer stalled: the receiver stopped responding for 120 seconds. '
+    'Both devices are still reachable, but the connection is not moving data.';
+
+
+
 /// This provider manages sending files to other devices.
 ///
 /// In contrast to [serverProvider], this provider does not manage a server.
@@ -92,7 +113,9 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
   }) async {
     // Pinned to the device the user picked, so the request is not sent at all
     // if someone else answers on that address.
-    final client = ref.read(httpProvider).pinnedTo(target.fingerprint);
+    final client = ref
+        .read(httpProvider)
+        .pinnedTo(target.fingerprint, timeout: _controlRequestTimeout);
     final sessionId = _uuid.v4();
     final createChecksums = ref.read(settingsProvider).createChecksums;
 
@@ -643,8 +666,37 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
       ),
     );
 
+    // Guards against a receiver that accepts the session and then stops
+    // reading. Without it the event stream never yields and the UI keeps
+    // reporting the transfer as running at 0% indefinitely.
+    var stalled = false;
+    Timer? stallTimer;
+    void restartStallWatchdog() {
+      stallTimer?.cancel();
+      stallTimer = Timer(_uploadStallTimeout, () {
+        stalled = true;
+        _logger.warning(
+          'No upload progress for ${_uploadStallTimeout.inSeconds}s, canceling the task',
+        );
+        ref
+            .redux(parentIsolateProvider)
+            .dispatch(
+              IsolateHttpUploadCancelAction(
+                taskId: taskResult.taskId,
+              ),
+            )
+            .catchError((Object e) {
+              // The provider may already be gone; the transfer is over anyway.
+              _logger.warning('Error while canceling the stalled task', e);
+            });
+      });
+    }
+
+    restartStallWatchdog();
+
     try {
       await for (final event in taskResult.events) {
+        restartStallWatchdog();
         switch (event) {
           case HttpUploadFileStartedEvent():
             _logger.info('Sending ${state[sessionId]?.files[event.fileId]?.file.fileName}');
@@ -678,10 +730,15 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
             );
         }
       }
+      if (stalled) {
+        // Canceling the task usually ends the stream quietly rather than with
+        // an error, so raise one here to take the same path as a real failure.
+        throw Exception(_uploadStallMessage);
+      }
     } catch (e, st) {
       // the whole task failed, mark all files of this task that did not finish as failed
       _logger.warning('Error while sending files', e, st);
-      final error = e.humanErrorMessage;
+      final error = stalled ? _uploadStallMessage : e.humanErrorMessage;
       final transferNotifier = ref.notifier(fileTransferProvider);
       final failedFileIds = uploadFiles
           .map((file) => file.fileId)
@@ -703,6 +760,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         ),
       );
     } finally {
+      stallTimer?.cancel();
       state = state.updateSession(
         sessionId: sessionId,
         state: (s) => s?.copyWith(
@@ -732,7 +790,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
     try {
       ref
           .read(httpProvider)
-          .pinnedTo(target.fingerprint)
+          .pinnedTo(target.fingerprint, timeout: _controlRequestTimeout)
           // ignore: discarded_futures
           .cancel(
             protocol: target.getProtocolType(),

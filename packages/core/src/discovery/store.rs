@@ -99,7 +99,19 @@ impl StatefulDevice {
         channels.sort_by_key(|(channel, status)| {
             std::cmp::Reverse((
                 **status == ChannelStatus::Available,
-                channel.is_ipv6(),
+                // IPv4 first.
+                //
+                // IPv6 is preferred by address-family conventions, but on a
+                // LAN it is the fragile choice: many routers hand out IPv6
+                // prefixes while silently dropping the traffic between
+                // clients, and a dropped SYN is not an error the OS reports.
+                // The dial then parks until the connect timeout expires, which
+                // the user experiences as a transfer that sits at 0% for
+                // hours. IPv4 either works or fails immediately, and every
+                // network that has an IPv6 channel has an IPv4 one too, so
+                // preferring IPv4 loses nothing. IPv6 stays in the list as a
+                // fallback for IPv6-only networks.
+                !channel.is_ipv6(),
                 self.last_confirmed(channel),
             ))
         });
@@ -412,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_channel_prefers_ipv6_over_ipv4() {
+    fn test_get_channel_prefers_ipv4_over_ipv6() {
         let store = DeviceStore::new();
 
         store.upsert(device("a", "fe80::1%3"), SystemTime::now());
@@ -421,8 +433,8 @@ mod tests {
         let known = store.by_fingerprint("a").unwrap();
         assert_eq!(
             channel_host(known.get_best_channel().unwrap()),
-            "fe80::1%3",
-            "IPv6 must beat a more recent IPv4 confirmation"
+            "192.168.0.10",
+            "IPv4 must beat IPv6: a dropped IPv6 SYN hangs instead of failing"
         );
     }
 
@@ -435,14 +447,14 @@ mod tests {
 
         let mut known = store.by_fingerprint("a").unwrap();
         for (channel, status) in known.channels.iter_mut() {
-            if channel_host(channel) == "fe80::1%3" {
+            if channel_host(channel) == "192.168.0.10" {
                 *status = ChannelStatus::NotReachable;
             }
         }
         assert_eq!(
             channel_host(known.get_best_channel().unwrap()),
-            "192.168.0.10",
-            "an available IPv4 channel must beat a not-reachable IPv6 one"
+            "fe80::1%3",
+            "an available IPv6 channel must beat a not-reachable IPv4 one"
         );
     }
 
@@ -462,12 +474,12 @@ mod tests {
             .collect();
         assert_eq!(
             hosts,
-            ["fe80::1%3", "10.0.0.10", "192.168.0.10"],
-            "IPv6 must come first, then the more recent IPv4 confirmation"
+            ["10.0.0.10", "192.168.0.10", "fe80::1%3"],
+            "IPv4 first (more recent first), IPv6 last"
         );
 
         for (channel, status) in known.channels.iter_mut() {
-            if channel_host(channel) == "fe80::1%3" {
+            if channel_host(channel) == "10.0.0.10" {
                 *status = ChannelStatus::NotReachable;
             }
         }
@@ -478,8 +490,9 @@ mod tests {
             .collect();
         assert_eq!(
             hosts,
-            ["10.0.0.10", "192.168.0.10", "fe80::1%3"],
-            "a not-reachable channel must sort last"
+            ["192.168.0.10", "fe80::1%3", "10.0.0.10"],
+            "an available channel outranks the address family: an unreachable \
+             IPv4 must sort behind an available IPv6"
         );
     }
 

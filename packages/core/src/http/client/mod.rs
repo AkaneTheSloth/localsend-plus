@@ -19,6 +19,12 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio_stream::wrappers::ReceiverStream;
 
+/// How long a peer is given to accept a TCP connection and complete the TLS
+/// handshake. Local network round trips are sub-millisecond, so this only ever
+/// fires for a peer that is gone or whose advertised address does not lead to
+/// it — cases that would otherwise wait for the OS default of several minutes.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 pub enum LsHttpClient {
     V2(LsHttpClientV2),
     V3(LsHttpClientV3),
@@ -254,7 +260,13 @@ pub(super) fn create_reqwest_client(
         // Peers never redirect; following one would talk to a different host
         // than the one whose certificate is being verified.
         .redirect(reqwest::redirect::Policy::none())
-        .dns_resolver(Arc::new(ScopedHostResolver));
+        .dns_resolver(Arc::new(ScopedHostResolver))
+        // A peer that is no longer reachable (stale announcement, link-local
+        // address on a different interface) otherwise blocks until the OS
+        // gives up on the SYN, which takes minutes and, for a stalled TLS
+        // handshake, never ends at all. Connecting to a local device is
+        // instant or not at all; anything slower than this is a dead peer.
+        .connect_timeout(CONNECT_TIMEOUT);
 
     if let Some(timeout) = timeout {
         builder = builder.timeout(timeout);
