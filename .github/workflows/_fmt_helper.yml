@@ -29,6 +29,12 @@ jobs:
         working-directory: app
         run: rm -rf lib/gen
 
+      - name: Analyze
+        working-directory: app
+        run: |
+          flutter analyze lib/provider/network/send_provider.dart lib/provider/http_provider.dart lib/provider/network/server/controller/receive_controller.dart 2>&1 | tee /tmp/analyze.txt
+          exit 0
+
       - name: dart format
         working-directory: app
         run: |

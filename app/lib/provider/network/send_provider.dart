@@ -678,17 +678,22 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         _logger.warning(
           'No upload progress for ${_uploadStallTimeout.inSeconds}s, canceling the task',
         );
-        ref
-            .redux(parentIsolateProvider)
-            .dispatch(
-              IsolateHttpUploadCancelAction(
-                taskId: taskResult.taskId,
+        unawaited(
+          ref
+              .redux(parentIsolateProvider)
+              .dispatch(
+                IsolateHttpUploadCancelAction(
+                  taskId: taskResult.taskId,
+                ),
+              )
+              .then<void>(
+                (_) {},
+                onError: (Object e, StackTrace st) {
+                  // The provider may already be gone; the transfer is over anyway.
+                  _logger.warning('Error while canceling the stalled task', e, st);
+                },
               ),
-            )
-            .catchError((Object e) {
-              // The provider may already be gone; the transfer is over anyway.
-              _logger.warning('Error while canceling the stalled task', e);
-            });
+        );
       });
     }
 
