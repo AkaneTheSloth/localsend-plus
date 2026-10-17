@@ -57,8 +57,6 @@ const _uploadStallMessage =
     'Transfer stalled: the receiver stopped responding for 120 seconds. '
     'Both devices are still reachable, but the connection is not moving data.';
 
-
-
 /// This provider manages sending files to other devices.
 ///
 /// In contrast to [serverProvider], this provider does not manage a server.
@@ -113,9 +111,7 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
   }) async {
     // Pinned to the device the user picked, so the request is not sent at all
     // if someone else answers on that address.
-    final client = ref
-        .read(httpProvider)
-        .pinnedTo(target.fingerprint, timeout: _controlRequestTimeout);
+    final client = ref.read(httpProvider).pinnedTo(target.fingerprint, timeout: _controlRequestTimeout);
     final sessionId = _uuid.v4();
     final createChecksums = ref.read(settingsProvider).createChecksums;
 
@@ -678,22 +674,12 @@ class SendNotifier extends Notifier<Map<String, SendSessionState>> {
         _logger.warning(
           'No upload progress for ${_uploadStallTimeout.inSeconds}s, canceling the task',
         );
-        unawaited(
-          ref
-              .redux(parentIsolateProvider)
-              .dispatch(
-                IsolateHttpUploadCancelAction(
-                  taskId: taskResult.taskId,
-                ),
-              )
-              .then<void>(
-                (_) {},
-                onError: (Object e, StackTrace st) {
-                  // The provider may already be gone; the transfer is over anyway.
-                  _logger.warning('Error while canceling the stalled task', e, st);
-                },
-              ),
-        );
+        try {
+          ref.redux(parentIsolateProvider).dispatch(IsolateHttpUploadCancelAction(taskId: taskResult.taskId));
+        } catch (e, st) {
+          // The provider may already be gone; the transfer is over anyway.
+          _logger.warning('Error while canceling the stalled task', e, st);
+        }
       });
     }
 
