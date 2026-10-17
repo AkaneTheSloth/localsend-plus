@@ -38,17 +38,44 @@ jobs:
           mkdir -p $APK_BUILD_DIR
           cp -r . $APK_BUILD_DIR
 
+      - name: Verify signing secrets are configured
+        env:
+          KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+          KEY_STORE: ${{ secrets.ANDROID_KEY_STORE }}
+        run: |
+          missing=""
+          [ -n "$KEY_PROPERTIES" ] || missing="$missing ANDROID_KEY_PROPERTIES"
+          [ -n "$KEY_STORE" ] || missing="$missing ANDROID_KEY_STORE"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo "Both secrets are required for release signing. Without them Gradle"
+            echo "fails at :app:packageRelease with 'SigningConfig \"release\" is"
+            echo "missing required property \"storeFile\"' after a full build."
+            exit 1
+          fi
+          echo "Both signing secrets are present."
+
       - name: Decode key.properties file
         working-directory: ${{ env.APK_BUILD_DIR }}
         env:
           ENCODED_STRING: ${{ secrets.ANDROID_KEY_PROPERTIES }}
-        run: echo $ENCODED_STRING | base64 -di > app/android/key.properties
+        run: printf '%s' "$ENCODED_STRING" | base64 -d > app/android/key.properties
 
       - name: Decode android-keystore.jks file
         working-directory: ${{ env.APK_BUILD_DIR }}
         env:
           ENCODED_STRING: ${{ secrets.ANDROID_KEY_STORE }}
-        run: mkdir secrets && echo $ENCODED_STRING | base64 -di > secrets/android-keystore.jks
+        run: mkdir -p secrets && printf '%s' "$ENCODED_STRING" | base64 -d > secrets/android-keystore.jks
+
+      - name: Validate decoded signing material
+        working-directory: ${{ env.APK_BUILD_DIR }}
+        run: |
+          [ -s app/android/key.properties ] || { echo "::error::key.properties decoded to an empty file"; exit 1; }
+          [ -s secrets/android-keystore.jks ] || { echo "::error::android-keystore.jks decoded to an empty file"; exit 1; }
+          store_pass=$(sed -n 's/^storePassword=//p' app/android/key.properties)
+          keytool -list -keystore secrets/android-keystore.jks -storepass "$store_pass" > /dev/null \
+            || { echo "::error::keystore is corrupt or storePassword is wrong"; exit 1; }
+          echo "Signing material decoded and verified."
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
