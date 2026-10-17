@@ -4,6 +4,9 @@
 >
 > **这不是官方项目**。这是一个随时可能停更的娱乐 fork，不承诺传输质量，
 > 但欢迎所有人 fork、改、玩。
+>
+> **这个仓库是 AI 写出来的。** 人类所有者只提需求和定方向，代码、提交、CI、Release
+> 全部由 AI agent 完成 —— 详见下方「关于这个仓库是 AI 做的」。
 
 ---
 
@@ -37,10 +40,23 @@ LocalSend+ 基于开源的 [LocalSend](https://github.com/localsend/localsend)�
 ### 免责声明
 
 - 这是一个**娱乐 fork**，与 LocalSend 官方无关。
-- 我**不对传输质量负责**：QUIC / 多线程 / 明文等改动可能引入未知问题，请自行评估风险后再用。
+- 本项目**不对传输质量负责**：QUIC / 多线程 / 明文等改动可能引入未知问题，请自行评估风险后再用。
 - 项目**随时可能停更**，没有维护承诺，也没有 issue 响应保证。
 - 但**欢迎所有人 fork**：想怎么改怎么改，开心就好 🎉
-- 🤖 开发者标注：**Goose**。本项目的**所有 Coding 工作由 AI（DeepSeek-V4-Pro）完成**，**不保证代码没有问题**——遇到 bug 很正常，请自行 review 源码后再用。
+- 🤖 **这个仓库是 AI 做的活。** 人类所有者只负责**提需求、定方向、判断「这样对不对」**，
+  其余全部由 AI agent 完成：
+
+  | 工作 | 谁做 |
+  |---|---|
+  | 编写与修改源码 | AI |
+  | 提交、推送、合并、处理 issue / PR | AI |
+  | 跑测试、排查 CI 失败 | AI |
+  | 构建 APK、打包并发布 Release | AI |
+  | 撰写文档（包括这份 README） | AI |
+
+  **没有人逐行 review 过这些改动**，所以**不保证代码正确**——遇到 bug 很正常，
+  请自行 review 源码后再用。发现问题欢迎开 issue：只要这个项目还在动，AI 就会接着修。
+  最初由 Goose（DeepSeek-V4-Pro）完成，现由跑在 Android 设备上的 Minis agent 维护。
 - 已安装旧版本的用户升级时若提示"签名不一致"，请卸载后重装（个人签名密钥）。
 
 ### 构建
@@ -97,11 +113,26 @@ See [LOCALSEND_PLUS.md](LOCALSEND_PLUS.md) for more technical details (in Chines
 ### Disclaimer
 
 - This is a **fun fork**, not affiliated with the official LocalSend project.
-- I am **NOT responsible for transfer quality**: QUIC / multi-threading / plain-text changes may
-  introduce unknown issues. Use at your own risk.
+- This project is **NOT responsible for transfer quality**: QUIC / multi-threading / plain-text changes
+  may introduce unknown issues. Use at your own risk.
 - This project **may be abandoned at any time**. No maintenance commitment, no issue-response guarantee.
 - But **everyone is welcome to fork it** — modify it however you like. Have fun! 🎉
-- 🤖 Developer: **Goose**. **All coding work in this project was done by an AI (DeepSeek-V4-Pro)**. **Correctness is not guaranteed** — bugs are to be expected; review the source code before using it.
+- 🤖 **This repository is AI work.** The human owner sets direction and requirements — that is all.
+  Everything else is done by an AI agent:
+
+  | Task | Who |
+  |---|---|
+  | Writing and modifying the source | AI |
+  | Committing, pushing, merging, triaging issues / PRs | AI |
+  | Running tests, debugging CI failures | AI |
+  | Building APKs, packaging and publishing releases | AI |
+  | Writing documentation, including this README | AI |
+
+  **No one reviews these changes line by line**, so **correctness is not guaranteed** — bugs are to
+  be expected; review the source code before using it. Issues are welcome — as long as this project is
+  still alive, the AI will keep fixing them.
+  Originally built by Goose (DeepSeek-V4-Pro); currently maintained by a Minis agent running on an
+  Android device.
 - If you installed an older build, you may need to uninstall and reinstall when the signature mismatches (personal signing key).
 
 ### Building
