@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  # NOTE(fork): the default branch of this fork is `localsend-plus`, not `main`.
+  # Keeping only `main` here means CI never fires — this fork has no `main` branch.
   push:
-    branches: [main]
+    branches: [main, localsend-plus]
   pull_request:
-    branches: [main]
+    branches: [main, localsend-plus]
+  workflow_dispatch:
 
 env:
   FLUTTER_VERSION: "3.41.9"
@@ -90,6 +93,54 @@ jobs:
         run: cargo test --package server
       - name: Check (plugin crate, CLI)
         run: cargo check --package rust_lib_localsend_app --package localsend-cli
+
+  # Cross-compiles the flutter_rust_bridge cdylib for Android/arm64.
+  #
+  # This exists because `cargo check --target aarch64-linux-android` needs a real
+  # NDK clang for the C dependencies (ring et al). Anyone developing on an aarch64
+  # host has no x86_64 NDK to drive, so this job is the only place the Android
+  # link step actually gets exercised outside of a full `flutter build apk`.
+  rust-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Rust
+        run: |
+          rustup toolchain install --profile minimal # version from rust-toolchain.toml
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Locate NDK
+        id: ndk
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          NDK=$(ls -d "$SDK"/ndk/* 2>/dev/null | sort -V | tail -1)
+          if [ -z "$NDK" ]; then
+            echo "No NDK found under $SDK/ndk — installing one from sdkmanager"
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" >/dev/null
+            NDK=$(ls -d "$SDK"/ndk/* | sort -V | tail -1)
+          fi
+          echo "Using NDK: $NDK"
+          echo "dir=$NDK" >> "$GITHUB_OUTPUT"
+
+      - name: Build (android, arm64 + arm32)
+        env:
+          NDK: ${{ steps.ndk.outputs.dir }}
+        run: |
+          TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          abi() { # <cargo target> <clang prefix>
+            target="$1"; clang="$2"
+            export "CC_${target//-/_}=$TC/${clang}24-clang"
+            export "AR_${target//-/_}=$TC/llvm-ar"
+            export "CARGO_TARGET_$(echo "$target" | tr 'a-z-' 'A-Z_')_LINKER=$TC/${clang}24-clang"
+          }
+          abi aarch64-linux-android aarch64-linux-android
+          abi armv7-linux-androideabi armv7a-linux-androideabi
+          cargo build --release --package rust_lib_localsend_app --target aarch64-linux-android
+          cargo build --release --package rust_lib_localsend_app --target armv7-linux-androideabi
+          ls -lh target/*/release/librust_lib_localsend_app.so
 
   packaging:
     runs-on: ubuntu-latest
