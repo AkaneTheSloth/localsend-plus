@@ -1,0 +1,48 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
+      run_id:
+        description: Compile APK run id
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: apk-result
+          path: apk
+          merge-multiple: true
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checksums
+        run: |
+          cd apk
+          find . -name '*.apk' -type f -exec sha256sum {} \; | sed 's|\./||' > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          ls -lh
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: LocalSend+ ${{ inputs.tag }}
+          body: |
+            Automated build from `${{ inputs.run_id }}`.
+
+            Transfers between two IPv6-capable peers (Android↔Android, Linux↔Linux,
+            Android↔Linux) no longer hang at 0%: the dial now prefers IPv4, connects are
+            bounded by a 10s timeout, and an upload that stops moving is aborted instead
+            of waiting forever. Pairs involving Windows were unaffected and stay unaffected.
+          files: |
+            apk/*.apk
+            apk/SHA256SUMS.txt
