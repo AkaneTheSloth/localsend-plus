@@ -6,7 +6,7 @@
 > 但欢迎所有人 fork、改、玩。
 >
 > **这个仓库是 AI 写出来的。** 人类所有者只提需求和定方向，代码、提交、CI、Release
-> 全部由 AI agent 完成 —— 详见下方「关于这个仓库是 AI 做的」。
+> 全部由 AI agent 完成 —— 详见下方免责声明。
 
 ---
 
@@ -83,6 +83,9 @@ flutter build linux
 ---
 
 ## English
+
+> **This repository is AI work.** The human owner only sets requirements and direction; the code,
+> the commits, CI, and the releases are all produced by an AI agent — see the disclaimer below.
 
 ### What is this
 
